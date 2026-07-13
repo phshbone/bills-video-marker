@@ -387,48 +387,23 @@
 
     const blob = new Blob(chunks, {type: recorder.mimeType || mimeType || 'video/webm'});
     const ext = (blob.type.includes('mp4')) ? 'mp4' : 'webm';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tap-marked-video.' + ext;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 30000);
 
     if(audioSource){ try{ audioSource.disconnect(); }catch(e){} }
     if(audioContext){ try{ await audioContext.close(); }catch(e){} }
 
     exporting.classList.remove('show');
     isExporting = false;
+    setStatus('Export complete. The finished video should appear in Downloads or Files.');
     video.currentTime = 0;
     drawOverlay();
-
-    const file = new File(
-      [blob],
-      'tap-marked-video.' + ext,
-      { type: blob.type || mimeType || 'video/webm' }
-    );
-
-    try{
-      if(navigator.share && navigator.canShare && navigator.canShare({ files:[file] })){
-        await navigator.share({
-          files:[file],
-          title:'Tap Marked Video'
-        });
-        setStatus('Share sheet opened. Choose Save Video to place it in Photos.');
-        return;
-      }
-    }catch(err){
-      if(err && err.name === 'AbortError'){
-        setStatus('Share canceled.');
-        return;
-      }
-      console.warn('Share failed:', err);
-    }
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = file.name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url), 30000);
-
-    setStatus('Share was unavailable, so the video was downloaded instead.');
   }
 
   exportBtn.addEventListener('click', exportVideo);
