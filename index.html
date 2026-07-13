@@ -81,7 +81,7 @@
     <div class="toolbar">
       <label class="file-label primary">
         Choose Video
-        <input id="fileInput" type="file" accept="video/*">
+        <input id="fileInput" type="file" accept="video/*,.mov,.mp4,.m4v">
       </label>
       <button id="playBtn" disabled>Play</button>
       <button id="undoBtn" disabled>Undo Tap</button>
@@ -210,27 +210,90 @@
     loop();
   }
 
-  fileInput.addEventListener('change', () => {
-    const file = fileInput.files && fileInput.files[0];
-    if(!file) return;
-    sourceFile = file;
-    taps = [];
-    updateTapCount();
-    if(objectUrl) URL.revokeObjectURL(objectUrl);
-    objectUrl = URL.createObjectURL(file);
-    video.src = objectUrl;
+  let loadTimer = null;
+  let dataUrlFallbackUsed = false;
+
+  function resetVideoUI(){
+    playBtn.disabled = true;
+    exportBtn.disabled = true;
+    timelineWrap.style.display = 'none';
+    video.style.display = 'none';
+    emptyState.style.display = 'block';
+  }
+
+  function finishVideoLoad(){
+    clearTimeout(loadTimer);
+    playBtn.disabled = false;
+    exportBtn.disabled = false;
     video.style.display = 'block';
     emptyState.style.display = 'none';
     timelineWrap.style.display = 'block';
-    setStatus('Loading video…');
-    video.load();
-  });
-
-  video.addEventListener('loadedmetadata', () => {
-    playBtn.disabled = false;
-    exportBtn.disabled = false;
     setStatus('Ready. Press Play, then tap the video to add markers.');
     requestAnimationFrame(resizeCanvas);
+  }
+
+  function loadWithDataUrl(file){
+    if(dataUrlFallbackUsed) return;
+    dataUrlFallbackUsed = true;
+    setStatus('Trying the iPhone compatibility loader…');
+    const reader = new FileReader();
+    reader.onload = () => {
+      video.removeAttribute('src');
+      video.src = reader.result;
+      video.load();
+    };
+    reader.onerror = () => {
+      resetVideoUI();
+      setStatus('The video could not be opened. Try saving it to Files first, then choose it from Browse.');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files && fileInput.files[0];
+    if(!file){
+      setStatus('No video was selected.');
+      return;
+    }
+
+    sourceFile = file;
+    taps = [];
+    updateTapCount();
+    dataUrlFallbackUsed = false;
+    resetVideoUI();
+    setStatus('Opening ' + (file.name || 'video') + '…');
+
+    if(objectUrl) URL.revokeObjectURL(objectUrl);
+    try{
+      objectUrl = URL.createObjectURL(file);
+      video.removeAttribute('src');
+      video.src = objectUrl;
+      video.load();
+    }catch(err){
+      loadWithDataUrl(file);
+      return;
+    }
+
+    clearTimeout(loadTimer);
+    loadTimer = setTimeout(() => {
+      if(!video.duration || !isFinite(video.duration)) loadWithDataUrl(file);
+    }, 3500);
+  });
+
+  video.addEventListener('loadedmetadata', finishVideoLoad);
+  video.addEventListener('loadeddata', () => {
+    if(video.videoWidth && video.videoHeight) finishVideoLoad();
+  });
+  video.addEventListener('canplay', finishVideoLoad);
+  video.addEventListener('error', () => {
+    clearTimeout(loadTimer);
+    if(sourceFile && !dataUrlFallbackUsed){
+      loadWithDataUrl(sourceFile);
+    }else{
+      resetVideoUI();
+      const code = video.error ? video.error.code : '';
+      setStatus('This video could not be loaded' + (code ? ' (error ' + code + ')' : '') + '. Try choosing it from Files instead of directly from Photos.');
+    }
   });
 
   video.addEventListener('play', () => playBtn.textContent = 'Pause');
