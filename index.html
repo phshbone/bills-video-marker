@@ -37,13 +37,11 @@
     display:flex;align-items:center;justify-content:center;cursor:pointer
   }
   button.primary,.file-label.primary{background:var(--accent);color:#171717;border-color:#e7c43e}
-  button.danger{background:#3a2024;color:#ffd8dc;border-color:#6a333a}
   button:disabled{opacity:.45;cursor:not-allowed}
   input[type=file]{display:none}
   .controls{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
   .control{background:#151a24;border:1px solid var(--border);border-radius:14px;padding:10px}
   .control label{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:.9rem;margin-bottom:8px}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   input[type=color]{width:100%;height:42px;border:0;border-radius:10px;background:transparent}
   input[type=range]{width:100%}
   .status{margin-top:10px;min-height:24px;color:var(--muted);font-size:.9rem}
@@ -64,7 +62,7 @@
 <div class="app">
   <header>
     <h1>Tap Marker</h1>
-    <div class="sub">Add visible taps to an existing screen recording. <span style="opacity:.65">Build 0.3</span></div>
+    <div class="sub">Add visible taps to an existing screen recording. Build 0.4 Restore</div>
   </header>
 
   <div class="card">
@@ -81,7 +79,7 @@
     <div class="toolbar">
       <label class="file-label primary">
         Choose Video
-        <input id="fileInput" type="file" accept="video/*,.mov,.mp4,.m4v,.MOV,.MP4,.M4V">
+        <input id="fileInput" type="file" accept="video/*">
       </label>
       <button id="playBtn" disabled>Play</button>
       <button id="undoBtn" disabled>Undo Tap</button>
@@ -210,157 +208,28 @@
     loop();
   }
 
-  let loadTimer = null;
-  let dataUrlFallbackUsed = false;
-
-  function resetVideoUI(){
-    playBtn.disabled = true;
-    exportBtn.disabled = true;
-    timelineWrap.style.display = 'none';
-    video.style.display = 'none';
-    emptyState.style.display = 'block';
-  }
-
-  function finishVideoLoad(){
-    clearTimeout(loadTimer);
-    playBtn.disabled = false;
-    exportBtn.disabled = false;
-    video.style.display = 'block';
-    emptyState.style.display = 'none';
-    timelineWrap.style.display = 'block';
-    setStatus('Ready. Press Play, then tap the video to add markers.');
-    requestAnimationFrame(resizeCanvas);
-  }
-
-  function loadWithDataUrl(file){
-    if(dataUrlFallbackUsed) return;
-    dataUrlFallbackUsed = true;
-    setStatus('Trying the iPhone compatibility loader…');
-    const reader = new FileReader();
-    reader.onload = () => {
-      video.removeAttribute('src');
-      video.src = reader.result;
-      video.load();
-    };
-    reader.onerror = () => {
-      resetVideoUI();
-      setStatus('The video could not be opened. Try saving it to Files first, then choose it from Browse.');
-    };
-    reader.readAsDataURL(file);
-  }
-
-  // iPhone may not fire "change" when the same video is selected twice.
-  // Reset the input before every picker opening so repeat tests still work.
-  fileInput.addEventListener('click', () => {
-    fileInput.value = '';
-    setStatus('Choose a video from Photos or Files…');
-  });
-
-  fileInput.addEventListener('change', async () => {
+  // ORIGINAL FIRST-BUILD UPLOAD LOGIC — restored exactly.
+  fileInput.addEventListener('change', () => {
     const file = fileInput.files && fileInput.files[0];
-
-    if(!file){
-      setStatus('No video was selected.');
-      return;
-    }
-
+    if(!file) return;
     sourceFile = file;
     taps = [];
     updateTapCount();
-
-    const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-    setStatus(`Selected: ${file.name || 'iPhone video'} (${sizeMB} MB). Loading…`);
-
-    if(objectUrl){
-      URL.revokeObjectURL(objectUrl);
-      objectUrl = null;
-    }
-
-    try{
-      objectUrl = URL.createObjectURL(file);
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
-
-      video.src = objectUrl;
-      video.style.display = 'block';
-      emptyState.style.display = 'none';
-      timelineWrap.style.display = 'block';
-      video.load();
-
-      // Force Safari to inspect the video without autoplaying it.
-      await new Promise((resolve, reject) => {
-        let finished = false;
-
-        const cleanup = () => {
-          video.removeEventListener('loadedmetadata', ok);
-          video.removeEventListener('canplay', ok);
-          video.removeEventListener('error', fail);
-        };
-
-        const ok = () => {
-          if(finished) return;
-          finished = true;
-          cleanup();
-          resolve();
-        };
-
-        const fail = () => {
-          if(finished) return;
-          finished = true;
-          cleanup();
-          const mediaError = video.error;
-          reject(new Error(
-            mediaError
-              ? `Video error ${mediaError.code}`
-              : 'Safari could not read this video.'
-          ));
-        };
-
-        video.addEventListener('loadedmetadata', ok, { once:false });
-        video.addEventListener('canplay', ok, { once:false });
-        video.addEventListener('error', fail, { once:false });
-
-        setTimeout(() => {
-          if(!finished){
-            finished = true;
-            cleanup();
-            reject(new Error('The video selection timed out. Try saving it to Files first.'));
-          }
-        }, 15000);
-      });
-
-      playBtn.disabled = false;
-      exportBtn.disabled = false;
-      setStatus(`Ready: ${file.name || 'selected video'}. Press Play, then tap the video.`);
-      requestAnimationFrame(resizeCanvas);
-
-    }catch(err){
-      console.error(err);
-      playBtn.disabled = true;
-      exportBtn.disabled = true;
-      setStatus(
-        'The video was selected, but Safari could not open it. ' +
-        'In Photos, use Share → Save to Files, then choose it again through Browse. ' +
-        '(' + (err && err.message ? err.message : 'unknown error') + ')'
-      );
-    }
+    if(objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(file);
+    video.src = objectUrl;
+    video.style.display = 'block';
+    emptyState.style.display = 'none';
+    timelineWrap.style.display = 'block';
+    setStatus('Loading video…');
+    video.load();
   });
 
-  video.addEventListener('loadedmetadata', finishVideoLoad);
-  video.addEventListener('loadeddata', () => {
-    if(video.videoWidth && video.videoHeight) finishVideoLoad();
-  });
-  video.addEventListener('canplay', finishVideoLoad);
-  video.addEventListener('error', () => {
-    clearTimeout(loadTimer);
-    if(sourceFile && !dataUrlFallbackUsed){
-      loadWithDataUrl(sourceFile);
-    }else{
-      resetVideoUI();
-      const code = video.error ? video.error.code : '';
-      setStatus('This video could not be loaded' + (code ? ' (error ' + code + ')' : '') + '. Try choosing it from Files instead of directly from Photos.');
-    }
+  video.addEventListener('loadedmetadata', () => {
+    playBtn.disabled = false;
+    exportBtn.disabled = false;
+    setStatus('Ready. Press Play, then tap the video to add markers.');
+    requestAnimationFrame(resizeCanvas);
   });
 
   video.addEventListener('play', () => playBtn.textContent = 'Pause');
@@ -416,10 +285,41 @@
   sizeSlider.addEventListener('input', () => sizeValue.textContent = sizeSlider.value);
   durationSlider.addEventListener('input', () => durationValue.textContent = Number(durationSlider.value).toFixed(2));
 
+  async function shareOrDownload(blob, ext){
+    const file = new File([blob], 'tap-marked-video.' + ext, { type: blob.type || 'video/webm' });
+
+    try{
+      if(navigator.share && navigator.canShare && navigator.canShare({ files:[file] })){
+        await navigator.share({
+          files:[file],
+          title:'Tap Marked Video'
+        });
+        setStatus('Share sheet opened. Choose Save Video or another destination.');
+        return;
+      }
+    }catch(err){
+      if(err && err.name === 'AbortError'){
+        setStatus('Share canceled. You can export again.');
+        return;
+      }
+      console.warn('Share failed:', err);
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 30000);
+    setStatus('Share was unavailable, so the video was downloaded instead.');
+  }
+
   async function exportVideo(){
     if(!sourceFile || !video.duration) return;
     if(!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream){
-      setStatus('This browser cannot export video. Try Chrome or Safari on a newer device.');
+      setStatus('This browser cannot export video.');
       return;
     }
 
@@ -516,43 +416,17 @@
     await finished;
 
     const blob = new Blob(chunks, {type: recorder.mimeType || mimeType || 'video/webm'});
-    const ext = (blob.type.includes('mp4')) ? 'mp4' : 'webm';
-    const fileName = 'tap-marked-video.' + ext;
-    const finishedFile = new File([blob], fileName, {type: blob.type || (ext === 'mp4' ? 'video/mp4' : 'video/webm')});
-
-    let shared = false;
-    try {
-      if (navigator.canShare && navigator.canShare({ files: [finishedFile] })) {
-        await navigator.share({
-          files: [finishedFile],
-          title: 'Tap Marked Video',
-          text: 'Finished instructional video'
-        });
-        shared = true;
-      }
-    } catch (err) {
-      if (err && err.name !== 'AbortError') console.warn('Share failed:', err);
-    }
-
-    if (!shared) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url), 30000);
-    }
+    const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
 
     if(audioSource){ try{ audioSource.disconnect(); }catch(e){} }
     if(audioContext){ try{ await audioContext.close(); }catch(e){} }
 
     exporting.classList.remove('show');
     isExporting = false;
-    setStatus(shared ? 'Share sheet opened. Choose Save Video to place it in Photos.' : 'Export complete. The finished video was downloaded because sharing was unavailable.');
     video.currentTime = 0;
     drawOverlay();
+
+    await shareOrDownload(blob, ext);
   }
 
   exportBtn.addEventListener('click', exportVideo);
