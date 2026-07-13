@@ -387,21 +387,40 @@
 
     const blob = new Blob(chunks, {type: recorder.mimeType || mimeType || 'video/webm'});
     const ext = (blob.type.includes('mp4')) ? 'mp4' : 'webm';
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'tap-marked-video.' + ext;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url), 30000);
+    const fileName = 'tap-marked-video.' + ext;
+    const finishedFile = new File([blob], fileName, {type: blob.type || (ext === 'mp4' ? 'video/mp4' : 'video/webm')});
+
+    let shared = false;
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [finishedFile] })) {
+        await navigator.share({
+          files: [finishedFile],
+          title: 'Tap Marked Video',
+          text: 'Finished instructional video'
+        });
+        shared = true;
+      }
+    } catch (err) {
+      if (err && err.name !== 'AbortError') console.warn('Share failed:', err);
+    }
+
+    if (!shared) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 30000);
+    }
 
     if(audioSource){ try{ audioSource.disconnect(); }catch(e){} }
     if(audioContext){ try{ await audioContext.close(); }catch(e){} }
 
     exporting.classList.remove('show');
     isExporting = false;
-    setStatus('Export complete. The finished video should appear in Downloads or Files.');
+    setStatus(shared ? 'Share sheet opened. Choose Save Video to place it in Photos.' : 'Export complete. The finished video was downloaded because sharing was unavailable.');
     video.currentTime = 0;
     drawOverlay();
   }
